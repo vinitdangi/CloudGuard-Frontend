@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
 import Link from "next/link";
 import {
@@ -25,6 +25,7 @@ import type { DashboardSnapshot, FindingSeverity } from "@/lib/dashboard-data";
 import { IMPLEMENTED_AWS_CHECKS } from "@/lib/dashboard-data";
 import { apiConfigurationMessage, apiErrorMessage, isApiEndpointConfigured } from "@/lib/api/client";
 import { testAwsConnection } from "@/lib/api/aws";
+import { buildAwsScanRequest } from "@/lib/api/aws-request.mjs";
 import { DASHBOARD_DATA_KEY, dashboardDataWithScan, runSecurityScan, type DashboardDataResult } from "@/lib/api/scans";
 import { AsciiScene } from "@/components/landing/ascii-scene";
 import { Badge } from "@/components/ui/badge";
@@ -130,11 +131,11 @@ export function SecurityScanSection({
   const [scanMessage, setScanMessage] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
   const [scanResult, setScanResult] = useState<Awaited<ReturnType<typeof runSecurityScan>> | null>(null);
-  const accessKeyInput = useRef<HTMLInputElement>(null);
-  const secretKeyInput = useRef<HTMLInputElement>(null);
+  const [accessKeyId, setAccessKeyId] = useState("");
+  const [secretAccessKey, setSecretAccessKey] = useState("");
   const clearCredentialFields = () => {
-    if (accessKeyInput.current) accessKeyInput.current.value = "";
-    if (secretKeyInput.current) secretKeyInput.current.value = "";
+    setAccessKeyId("");
+    setSecretAccessKey("");
   };
 
   useEffect(() => {
@@ -156,15 +157,14 @@ export function SecurityScanSection({
     if (!isApiEndpointConfigured("testAwsConnection")) {
       setLocalConnectionState("failed");
       setConnectionMessage(apiConfigurationMessage("testAwsConnection") ?? "AWS connection endpoint is not configured.");
-      clearCredentialFields();
       return;
     }
 
     const credentials = useEnvironmentCredentials
       ? undefined
       : {
-          accessKeyId: accessKeyInput.current?.value.trim() ?? "",
-          secretAccessKey: secretKeyInput.current?.value ?? "",
+          accessKeyId: accessKeyId.trim(),
+          secretAccessKey,
         };
     if (credentials && (!credentials.accessKeyId || !credentials.secretAccessKey)) {
       setLocalConnectionState("failed");
@@ -196,8 +196,6 @@ export function SecurityScanSection({
       setLocalConnectionState("failed");
       onConnectionVerificationChange(false);
       setConnectionMessage(apiErrorMessage(error, "AWS connection test failed."));
-    } finally {
-      clearCredentialFields();
     }
   };
 
@@ -205,15 +203,14 @@ export function SecurityScanSection({
     setScanMessage("");
     if (!isApiEndpointConfigured("runSecurityScan")) {
       setScanMessage(apiConfigurationMessage("runSecurityScan") ?? "Security scan endpoint is not configured.");
-      clearCredentialFields();
       return;
     }
 
     const credentials = useEnvironmentCredentials
       ? undefined
       : {
-          accessKeyId: accessKeyInput.current?.value.trim() ?? "",
-          secretAccessKey: secretKeyInput.current?.value ?? "",
+          accessKeyId: accessKeyId.trim(),
+          secretAccessKey,
         };
     if (credentials && (!credentials.accessKeyId || !credentials.secretAccessKey)) {
       setScanMessage("Enter both AWS keys or select existing backend environment credentials.");
@@ -222,18 +219,14 @@ export function SecurityScanSection({
 
     setScanLoading(true);
     try {
-      const response = await runSecurityScan({
-        auth_method: useEnvironmentCredentials
-          ? "Existing AWS Environment Credentials"
-          : "Access Key",
+      const response = await runSecurityScan(buildAwsScanRequest({
+        useEnvironmentCredentials,
         region,
-        ...(credentials
-          ? {
-              access_key_id: credentials.accessKeyId,
-              secret_access_key: credentials.secretAccessKey,
-            }
-          : {}),
-      });
+        ...(credentials ? {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+        } : {}),
+      }));
       setScanResult(response);
       setScanMessage(`CloudGuard returned scan data with status: ${response.scan.status}.`);
       await mutate<DashboardDataResult>(
@@ -249,6 +242,8 @@ export function SecurityScanSection({
     } finally {
       setScanLoading(false);
       clearCredentialFields();
+      setLocalConnectionState(null);
+      onConnectionVerificationChange(false);
     }
   };
 
@@ -276,7 +271,7 @@ export function SecurityScanSection({
             <p className="font-mono text-[9px] uppercase tracking-[0.19em] text-white/35">AWS configuration</p>
             <CardTitle className="mt-2 font-display text-[1.55rem] font-normal tracking-tight text-white">Connection details</CardTitle>
             <CardDescription className="max-w-lg text-[10px] leading-5 text-white/40">
-              Credentials are not sent or saved here. Connect the existing CloudGuard API to securely test this configuration.
+              Credentials stay in this page's memory and are sent only to the CloudGuard API for testing and scanning. They are not saved in browser storage.
             </CardDescription>
           </CardHeader>
           <CardContent className="px-5 pb-5 sm:px-6 sm:pb-6">
@@ -327,13 +322,14 @@ export function SecurityScanSection({
                       Access Key ID
                     </FieldLabel>
                     <Input
-                      ref={accessKeyInput}
                       id="aws-access-key-id"
                       type="text"
+                      value={accessKeyId}
                       autoComplete="off"
                       spellCheck={false}
                       placeholder="Enter Access Key ID"
-                      onChange={() => {
+                      onChange={(event) => {
+                        setAccessKeyId(event.target.value);
                         setLocalConnectionState(null);
                         onConnectionVerificationChange(false);
                       }}
@@ -345,13 +341,14 @@ export function SecurityScanSection({
                       Secret Access Key
                     </FieldLabel>
                     <Input
-                      ref={secretKeyInput}
                       id="aws-secret-access-key"
                       type="password"
+                      value={secretAccessKey}
                       autoComplete="new-password"
                       spellCheck={false}
                       placeholder="Enter Secret Access Key"
-                      onChange={() => {
+                      onChange={(event) => {
+                        setSecretAccessKey(event.target.value);
                         setLocalConnectionState(null);
                         onConnectionVerificationChange(false);
                       }}
@@ -468,13 +465,18 @@ export function SecurityScanSection({
                   id="security-scan-run-button"
                   type="button"
                   onClick={startSecurityScan}
-                  disabled={scanInProgress}
+                  disabled={scanInProgress || connectionState !== "connected"}
                   className="h-10 w-full shrink-0 rounded-none bg-white px-4 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#101210] hover:bg-white/90 sm:w-auto"
                 >
                   <ScanLine data-icon="inline-start" className={scanInProgress ? "motion-safe:animate-spin" : undefined} />
                   {scanInProgress ? "Scanning AWS environment…" : "Run Security Scan"}
                 </Button>
               </div>
+              {connectionState !== "connected" && !scanMessage ? (
+                <p role="status" className="mt-3 text-[9px] leading-4 text-white/45">
+                  Enter both AWS keys or enable existing environment credentials, then test the connection before running a scan.
+                </p>
+              ) : null}
               {scanMessage ? (
                 <p role="status" aria-live="polite" className="mt-3 border border-amber-200/10 bg-amber-100/[0.025] px-3 py-2 text-[9px] leading-4 text-amber-50/65">
                   {scanMessage}
