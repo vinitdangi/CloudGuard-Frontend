@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { resolveApiBaseUrl } from "@/lib/api/base-url.mjs";
 import {
   API_BASE_URL_ENV,
   API_ENDPOINTS,
@@ -29,7 +30,11 @@ export class ApiError extends Error {
 }
 
 function baseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
+  return resolveApiBaseUrl({
+    isProduction: process.env.NODE_ENV === "production",
+    browserOrigin: typeof window === "undefined" ? undefined : window.location.origin,
+    configuredBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL,
+  });
 }
 
 export function isApiEndpointConfigured(name: ApiEndpointName) {

@@ -1,7 +1,12 @@
+import { apiProxyDestination } from "./lib/api/base-url.mjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
     unoptimized: true,
+  },
+  async rewrites() {
+    return apiProxyDestination(process.env.NEXT_PUBLIC_API_BASE_URL);
   },
   async headers() {
     return [
