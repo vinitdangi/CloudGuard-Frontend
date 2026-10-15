@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useSWRConfig } from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiErrorMessage } from "@/lib/api/client";
 import { login, signup } from "@/lib/api/auth";
+import { establishAuthenticatedSession } from "@/lib/auth-session.mjs";
 import { ArrowDownRight, ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, ShieldCheck } from "lucide-react";
 import { AsciiScene } from "@/components/landing/ascii-scene";
 import { Button } from "@/components/ui/button";
@@ -132,6 +134,7 @@ function AuthPasswordField({
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const router = useRouter();
+  const { mutate } = useSWRConfig();
   const isLogin = mode === "login";
   const [values, setValues] = useState(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -193,6 +196,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         return;
       }
 
+      // Clear any cached auth error from a previous dashboard visit before its
+      // guard can observe stale state during the next /api/auth/me revalidation.
+      await establishAuthenticatedSession(mutate, response);
       router.replace("/dashboard");
     } catch (error) {
       setFeedback({

@@ -50,6 +50,7 @@ import {
 } from "@/lib/dashboard-data";
 import { apiErrorMessage, ApiError } from "@/lib/api/client";
 import { getCurrentUser, logout } from "@/lib/api/auth";
+import { AUTH_SESSION_KEY, shouldRedirectToLogin } from "@/lib/auth-session.mjs";
 import { DASHBOARD_DATA_KEY, getDashboardData, hasDashboardEndpointConfiguration, type DashboardDataResult } from "@/lib/api/scans";
 import { downloadJsonReport, downloadPdfReport, saveReportFile } from "@/lib/api/reports";
 import type { ReportFormat } from "@/lib/api/types";
@@ -263,13 +264,13 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
     error: authError,
     isLoading: authLoading,
     mutate: mutateAuthSession,
-  } = useSWR("cloudguard:auth-session", () => getCurrentUser(), {
+  } = useSWR(AUTH_SESSION_KEY, () => getCurrentUser(), {
     shouldRetryOnError: false,
     revalidateOnFocus: true,
   });
   const authenticatedUser = authSession?.authenticated ? authSession.user : null;
   useEffect(() => {
-    if (!authLoading && authError instanceof ApiError && authError.code === "authentication") {
+    if (shouldRedirectToLogin(authLoading, authError)) {
       router.replace("/login");
     }
   }, [authError, authLoading, router]);
