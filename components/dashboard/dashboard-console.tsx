@@ -50,7 +50,12 @@ import {
 } from "@/lib/dashboard-data";
 import { apiErrorMessage, ApiError } from "@/lib/api/client";
 import { getCurrentUser, logout } from "@/lib/api/auth";
-import { AUTH_SESSION_KEY, shouldRedirectToLogin } from "@/lib/auth-session.mjs";
+import {
+  AUTH_SESSION_KEY,
+  clearAuthenticatedSession,
+  fetchCurrentUserForSession,
+  shouldRedirectToLogin,
+} from "@/lib/auth-session.mjs";
 import { DASHBOARD_DATA_KEY, getDashboardData, hasDashboardEndpointConfiguration, type DashboardDataResult } from "@/lib/api/scans";
 import { downloadJsonReport, downloadPdfReport, saveReportFile } from "@/lib/api/reports";
 import type { ReportFormat } from "@/lib/api/types";
@@ -264,7 +269,7 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
     error: authError,
     isLoading: authLoading,
     mutate: mutateAuthSession,
-  } = useSWR(AUTH_SESSION_KEY, () => getCurrentUser(), {
+  } = useSWR(AUTH_SESSION_KEY, () => fetchCurrentUserForSession(getCurrentUser), {
     shouldRetryOnError: false,
     revalidateOnFocus: true,
   });
@@ -321,12 +326,14 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
     setActionMessage(null);
     try {
       await logout();
+      clearAuthenticatedSession();
       setAwsConnectionVerified(false);
       await mutateAuthSession(undefined, { revalidate: false });
       await mutate(DASHBOARD_DATA_KEY, undefined, { revalidate: false });
       router.replace("/");
     } catch (error) {
       if (error instanceof ApiError && error.code === "authentication") {
+        clearAuthenticatedSession();
         setAwsConnectionVerified(false);
         await mutateAuthSession(undefined, { revalidate: false });
         await mutate(DASHBOARD_DATA_KEY, undefined, { revalidate: false });

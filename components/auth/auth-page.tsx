@@ -198,8 +198,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
       // Clear any cached auth error from a previous dashboard visit before its
       // guard can observe stale state during the next /api/auth/me revalidation.
-      await establishAuthenticatedSession(mutate, response);
-      router.replace("/dashboard");
+      await establishAuthenticatedSession(mutate, response, () => router.replace("/dashboard"));
     } catch (error) {
       setFeedback({
         kind: "error",
