@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSWRConfig } from "swr";
 import Link from "next/link";
 import {
@@ -40,6 +40,11 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { ReportFormat } from "@/lib/api/types";
+import {
+  canRunAwsScan,
+  completeAwsConnectionTest,
+} from "@/lib/aws-session-state.mjs";
+import type { AwsConnectionState } from "@/lib/aws-session-state.mjs";
 
 const regions = [
   ["us-east-1", "US East (N. Virginia)"],
@@ -57,7 +62,7 @@ const regions = [
 
 const checkIcons = [Fingerprint, HardDrive, Network, Globe2, Activity] as const;
 
-type ConnectionState = "not-connected" | "testing" | "connected" | "failed";
+type ConnectionState = AwsConnectionState["status"];
 type FindingSeverityCount = Record<FindingSeverity, number>;
 
 function StatusBadge({ state }: { state: ConnectionState }) {
@@ -109,38 +114,26 @@ function SummaryValue({ label, value }: { label: string; value: number | string 
 
 export function SecurityScanSection({
   snapshot,
+  connection,
+  onConnectionChange,
   onReportDownload,
   reportLoading,
   reportMessage,
-  onConnectionVerificationChange,
 }: {
   snapshot: DashboardSnapshot;
-  onConnectionVerificationChange: (verified: boolean) => void;
+  connection: AwsConnectionState;
+  onConnectionChange: (changes: Partial<AwsConnectionState>) => void;
   onReportDownload: (format: ReportFormat) => Promise<void>;
   reportLoading: ReportFormat | null;
   reportMessage: { kind: "error" | "success"; message: string } | null;
 }) {
   const { mutate } = useSWRConfig();
-  const [localConnectionState, setLocalConnectionState] = useState<"testing" | "connected" | "failed" | null>(null);
-  const connectionState: ConnectionState = localConnectionState ?? "not-connected";
-  const [region, setRegion] = useState(snapshot.region ?? "us-east-1");
-  const [useEnvironmentCredentials, setUseEnvironmentCredentials] = useState(false);
+  const connectionState = connection.status;
+  const updateConnection = onConnectionChange;
   const [connectionMessage, setConnectionMessage] = useState("");
-  const [connectionAccount, setConnectionAccount] = useState<string | null>(null);
-  const [connectionRegion, setConnectionRegion] = useState<string | null>(null);
   const [scanMessage, setScanMessage] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
   const [scanResult, setScanResult] = useState<Awaited<ReturnType<typeof runSecurityScan>> | null>(null);
-  const [accessKeyId, setAccessKeyId] = useState("");
-  const [secretAccessKey, setSecretAccessKey] = useState("");
-  const clearCredentialFields = () => {
-    setAccessKeyId("");
-    setSecretAccessKey("");
-  };
-
-  useEffect(() => {
-    if (snapshot.region) setRegion(snapshot.region);
-  }, [snapshot.region]);
 
   const latestScanStatus = scanResult?.scan.status ?? snapshot.scans[0]?.status;
   const scanCompleted = latestScanStatus === "Completed";
@@ -153,32 +146,32 @@ export function SecurityScanSection({
 
   const testConnection = async () => {
     setConnectionMessage("");
-    onConnectionVerificationChange(false);
+    updateConnection({ status: "not-connected", accountId: null, verifiedRegion: null });
     if (!isApiEndpointConfigured("testAwsConnection")) {
-      setLocalConnectionState("failed");
+      updateConnection({ status: "failed" });
       setConnectionMessage(apiConfigurationMessage("testAwsConnection") ?? "AWS connection endpoint is not configured.");
       return;
     }
 
-    const credentials = useEnvironmentCredentials
+    const credentials = connection.useEnvironmentCredentials
       ? undefined
       : {
-          accessKeyId: accessKeyId.trim(),
-          secretAccessKey,
+          accessKeyId: connection.accessKeyId.trim(),
+          secretAccessKey: connection.secretAccessKey,
         };
     if (credentials && (!credentials.accessKeyId || !credentials.secretAccessKey)) {
-      setLocalConnectionState("failed");
+      updateConnection({ status: "failed" });
       setConnectionMessage("Enter both AWS keys or select existing backend environment credentials.");
       return;
     }
 
-    setLocalConnectionState("testing");
+    updateConnection({ status: "testing" });
     try {
       const response = await testAwsConnection({
-        auth_method: useEnvironmentCredentials
+        auth_method: connection.useEnvironmentCredentials
           ? "Existing AWS Environment Credentials"
           : "Access Key",
-        region,
+        region: connection.region,
         ...(credentials
           ? {
               access_key_id: credentials.accessKeyId,
@@ -186,15 +179,11 @@ export function SecurityScanSection({
             }
           : {}),
       });
-      setLocalConnectionState(response.connected ? "connected" : "failed");
-      onConnectionVerificationChange(response.connected);
-      setConnectionAccount(response.account_id);
-      setConnectionRegion(response.region);
+      onConnectionChange(completeAwsConnectionTest(connection, response));
       setConnectionMessage(response.message ?? (response.connected ? "AWS connection verified by CloudGuard." : "AWS connection was not verified."));
       if (response.connected) await mutate(DASHBOARD_DATA_KEY);
     } catch (error) {
-      setLocalConnectionState("failed");
-      onConnectionVerificationChange(false);
+      updateConnection({ status: "failed", accountId: null, verifiedRegion: null });
       setConnectionMessage(apiErrorMessage(error, "AWS connection test failed."));
     }
   };
@@ -206,11 +195,16 @@ export function SecurityScanSection({
       return;
     }
 
-    const credentials = useEnvironmentCredentials
+    if (!canRunAwsScan(connection)) {
+      setScanMessage("Test the current AWS connection before running a security scan.");
+      return;
+    }
+
+    const credentials = connection.useEnvironmentCredentials
       ? undefined
       : {
-          accessKeyId: accessKeyId.trim(),
-          secretAccessKey,
+          accessKeyId: connection.accessKeyId.trim(),
+          secretAccessKey: connection.secretAccessKey,
         };
     if (credentials && (!credentials.accessKeyId || !credentials.secretAccessKey)) {
       setScanMessage("Enter both AWS keys or select existing backend environment credentials.");
@@ -220,8 +214,8 @@ export function SecurityScanSection({
     setScanLoading(true);
     try {
       const response = await runSecurityScan(buildAwsScanRequest({
-        useEnvironmentCredentials,
-        region,
+        useEnvironmentCredentials: connection.useEnvironmentCredentials,
+        region: connection.region,
         ...(credentials ? {
           accessKeyId: credentials.accessKeyId,
           secretAccessKey: credentials.secretAccessKey,
@@ -241,9 +235,6 @@ export function SecurityScanSection({
       setScanMessage(apiErrorMessage(error, "The CloudGuard security scan failed."));
     } finally {
       setScanLoading(false);
-      clearCredentialFields();
-      setLocalConnectionState(null);
-      onConnectionVerificationChange(false);
     }
   };
 
@@ -266,6 +257,7 @@ export function SecurityScanSection({
       </div>
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+        <div id="settings" className="scroll-mt-24">
         <Card id="aws-configuration" className="scroll-mt-24 gap-0 rounded-none border-white/[0.09] bg-white/[0.02] py-0 shadow-none">
           <CardHeader className="px-5 pb-3 pt-5 sm:px-6 sm:pt-6">
             <p className="font-mono text-[9px] uppercase tracking-[0.19em] text-white/35">AWS configuration</p>
@@ -282,11 +274,10 @@ export function SecurityScanSection({
                 </FieldLabel>
                 <select
                   id="aws-region"
-                  value={region}
+                  value={connection.region}
+                  disabled={connectionState === "testing"}
                   onChange={(event) => {
-                    setRegion(event.target.value);
-                    setLocalConnectionState(null);
-                    onConnectionVerificationChange(false);
+                    updateConnection({ status: "not-connected", region: event.target.value, accountId: null, verifiedRegion: null });
                   }}
                   className="h-10 w-full min-w-0 border border-white/[0.12] bg-[#0b0e0d] px-3 font-mono text-[11px] text-white/80 outline-none transition-colors focus-visible:border-emerald-100/50 focus-visible:ring-2 focus-visible:ring-emerald-100/15"
                 >
@@ -301,11 +292,10 @@ export function SecurityScanSection({
               <label className="flex min-h-11 cursor-pointer items-center gap-3 border border-white/[0.09] bg-white/[0.02] px-3">
                 <input
                   type="checkbox"
-                  checked={useEnvironmentCredentials}
+                  checked={connection.useEnvironmentCredentials}
+                  disabled={connectionState === "testing"}
                   onChange={(event) => {
-                    setUseEnvironmentCredentials(event.target.checked);
-                    setLocalConnectionState(null);
-                    onConnectionVerificationChange(false);
+                    updateConnection({ status: "not-connected", useEnvironmentCredentials: event.target.checked, accountId: null, verifiedRegion: null });
                   }}
                   className="size-4 shrink-0 accent-emerald-200"
                 />
@@ -315,7 +305,7 @@ export function SecurityScanSection({
                 </span>
               </label>
 
-              {!useEnvironmentCredentials ? (
+              {!connection.useEnvironmentCredentials ? (
                 <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                   <Field>
                     <FieldLabel htmlFor="aws-access-key-id" className="font-mono text-[9px] uppercase tracking-[0.13em] text-white/50">
@@ -324,14 +314,13 @@ export function SecurityScanSection({
                     <Input
                       id="aws-access-key-id"
                       type="text"
-                      value={accessKeyId}
+                      value={connection.accessKeyId}
+                      disabled={connectionState === "testing"}
                       autoComplete="off"
                       spellCheck={false}
                       placeholder="Enter Access Key ID"
                       onChange={(event) => {
-                        setAccessKeyId(event.target.value);
-                        setLocalConnectionState(null);
-                        onConnectionVerificationChange(false);
+                        updateConnection({ status: "not-connected", accessKeyId: event.target.value, accountId: null, verifiedRegion: null });
                       }}
                       className="h-10 rounded-none border-white/[0.12] bg-black/20 px-3 font-mono text-[11px] text-white placeholder:text-white/25 focus-visible:border-emerald-100/40 focus-visible:ring-emerald-100/10"
                     />
@@ -343,14 +332,13 @@ export function SecurityScanSection({
                     <Input
                       id="aws-secret-access-key"
                       type="password"
-                      value={secretAccessKey}
+                      value={connection.secretAccessKey}
+                      disabled={connectionState === "testing"}
                       autoComplete="new-password"
                       spellCheck={false}
                       placeholder="Enter Secret Access Key"
                       onChange={(event) => {
-                        setSecretAccessKey(event.target.value);
-                        setLocalConnectionState(null);
-                        onConnectionVerificationChange(false);
+                        updateConnection({ status: "not-connected", secretAccessKey: event.target.value, accountId: null, verifiedRegion: null });
                       }}
                       className="h-10 rounded-none border-white/[0.12] bg-black/20 px-3 font-mono text-[11px] text-white placeholder:text-white/25 focus-visible:border-emerald-100/40 focus-visible:ring-emerald-100/10"
                     />
@@ -381,11 +369,11 @@ export function SecurityScanSection({
                 <div className="min-w-0">
                   <p className="text-[10px] font-medium text-emerald-50/90">Connected to AWS</p>
                   <p className="mt-1 text-[9px] leading-4 text-white/40">
-                    {connectionAccount
-                      ? `Account ${connectionAccount}`
+                    {connection.accountId
+                      ? `Account ${connection.accountId}`
                       : "Account information not provided"}
-                    {connectionRegion
-                      ? ` · ${connectionRegion}`
+                    {connection.verifiedRegion
+                      ? ` · ${connection.verifiedRegion}`
                       : " · Region information not provided"}
                   </p>
                   {connectionMessage ? <p className="mt-1 text-[9px] leading-4 text-emerald-50/65">{connectionMessage}</p> : null}
@@ -411,6 +399,7 @@ export function SecurityScanSection({
             ) : null}
           </CardContent>
         </Card>
+        </div>
 
         <div className="flex min-w-0 flex-col gap-4">
           <Card className="relative isolate min-h-[260px] overflow-hidden gap-0 rounded-none border-white/[0.09] bg-[#0c100e] py-0 shadow-none">
@@ -465,14 +454,14 @@ export function SecurityScanSection({
                   id="security-scan-run-button"
                   type="button"
                   onClick={startSecurityScan}
-                  disabled={scanInProgress || connectionState !== "connected"}
+                  disabled={scanInProgress || !canRunAwsScan(connection)}
                   className="h-10 w-full shrink-0 rounded-none bg-white px-4 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#101210] hover:bg-white/90 sm:w-auto"
                 >
                   <ScanLine data-icon="inline-start" className={scanInProgress ? "motion-safe:animate-spin" : undefined} />
                   {scanInProgress ? "Scanning AWS environment…" : "Run Security Scan"}
                 </Button>
               </div>
-              {connectionState !== "connected" && !scanMessage ? (
+              {!canRunAwsScan(connection) && !scanMessage ? (
                 <p role="status" className="mt-3 text-[9px] leading-4 text-white/45">
                   Enter both AWS keys or enable existing environment credentials, then test the connection before running a scan.
                 </p>

@@ -59,6 +59,11 @@ import {
 import { DASHBOARD_DATA_KEY, getDashboardData, hasDashboardEndpointConfiguration, type DashboardDataResult } from "@/lib/api/scans";
 import { downloadJsonReport, downloadPdfReport, saveReportFile } from "@/lib/api/reports";
 import type { ReportFormat } from "@/lib/api/types";
+import {
+  createAwsConnectionState,
+  updateAwsConnectionState,
+} from "@/lib/aws-session-state.mjs";
+import type { AwsConnectionState } from "@/lib/aws-session-state.mjs";
 
 type NavigationItem = {
   label: string;
@@ -291,7 +296,25 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
   const [actionMessage, setActionMessage] = useState<{ kind: "error" | "success"; message: string } | null>(null);
   const [reportLoading, setReportLoading] = useState<ReportFormat | null>(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
-  const [awsConnectionVerified, setAwsConnectionVerified] = useState(false);
+  const [awsConnection, setAwsConnection] = useState<AwsConnectionState>(() => createAwsConnectionState(snapshot.region ?? "us-east-1"));
+
+  const updateAwsConnection = (changes: Partial<AwsConnectionState>) => {
+    setAwsConnection((current) => updateAwsConnectionState(current, changes));
+  };
+  const clearAwsConnection = () => {
+    setAwsConnection(createAwsConnectionState());
+  };
+
+  useEffect(() => {
+    const latestRegion = dashboardSnapshot.region;
+    if (latestRegion) {
+      setAwsConnection((current) => (
+        current.status === "not-connected" && !current.accessKeyId && !current.secretAccessKey
+          ? { ...current, region: latestRegion }
+          : current
+      ));
+    }
+  }, [dashboardSnapshot.region]);
 
   useEffect(() => {
     const syncActiveSection = () => {
@@ -324,17 +347,16 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
     if (logoutLoading) return;
     setLogoutLoading(true);
     setActionMessage(null);
+    clearAwsConnection();
     try {
       await logout();
       clearAuthenticatedSession();
-      setAwsConnectionVerified(false);
       await mutateAuthSession(undefined, { revalidate: false });
       await mutate(DASHBOARD_DATA_KEY, undefined, { revalidate: false });
       router.replace("/");
     } catch (error) {
       if (error instanceof ApiError && error.code === "authentication") {
         clearAuthenticatedSession();
-        setAwsConnectionVerified(false);
         await mutateAuthSession(undefined, { revalidate: false });
         await mutate(DASHBOARD_DATA_KEY, undefined, { revalidate: false });
         router.replace("/");
@@ -452,7 +474,7 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
           <div className="cg-console-enter mx-auto w-full max-w-[1380px] px-4 pb-16 pt-7 sm:px-6 sm:pt-9 lg:px-8 lg:pt-10 xl:px-10">
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <StatePill connected={awsConnectionVerified} />
+                <StatePill connected={awsConnection.status === "connected"} />
                 <Badge variant="outline" className="h-7 gap-2 rounded-none border-white/[0.09] bg-white/[0.02] px-2.5 font-mono text-[9px] uppercase tracking-[0.1em] text-white/50">
                   <Globe2 aria-hidden="true" className="size-3" />
                   {dashboardSnapshot.region ?? "Region not set"}
@@ -487,7 +509,7 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
                 <p role="status" className="mb-4 border border-amber-200/15 bg-amber-100/[0.025] px-4 py-3 text-[10px] leading-5 text-amber-50/70">Some dashboard data is unavailable: {apiData.errors[0]}</p>
               ) : null}
 
-              {!awsConnectionVerified ? (
+              {awsConnection.status !== "connected" ? (
                 <div role="status" className="mb-5 flex flex-col gap-2 border border-amber-200/15 bg-amber-100/[0.035] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                   <div className="flex items-start gap-3">
                     <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-amber-100/75" />
@@ -558,8 +580,8 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
                       <span className="max-w-[58%] truncate text-right font-mono text-[9px] text-white/70">{dashboardSnapshot.region ?? "Not configured"}</span>
                     </div>
                     <div className="mt-1 flex items-center gap-2 border border-white/[0.08] bg-black/10 px-3 py-2.5">
-                      <span className={`size-1.5 shrink-0 rounded-full ${awsConnectionVerified ? "bg-emerald-200" : "bg-amber-200/80"}`} />
-                      <span className="text-[10px] text-white/60">{awsConnectionVerified ? "Connection verified this session" : "Current AWS connection unverified"}</span>
+                      <span className={`size-1.5 shrink-0 rounded-full ${awsConnection.status === "connected" ? "bg-emerald-200" : "bg-amber-200/80"}`} />
+                      <span className="text-[10px] text-white/60">{awsConnection.status === "connected" ? "Connection verified this session" : "Current AWS connection unverified"}</span>
                     </div>
                     <Link href="#aws-configuration" onClick={() => navigateTo("AWS Configuration")} className="mt-3 inline-flex min-h-8 items-center gap-1.5 text-[10px] text-white/45 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
                       Configure AWS <ArrowRight aria-hidden="true" className="size-3" />
@@ -590,7 +612,7 @@ export function DashboardConsole({ snapshot = EMPTY_DASHBOARD }: { snapshot?: Da
               </div>
             </section>
 
-            <SecurityScanSection snapshot={dashboardSnapshot} onConnectionVerificationChange={setAwsConnectionVerified} onReportDownload={handleReportDownload} reportLoading={reportLoading} reportMessage={actionMessage} />
+            <SecurityScanSection snapshot={dashboardSnapshot} connection={awsConnection} onConnectionChange={updateAwsConnection} onReportDownload={handleReportDownload} reportLoading={reportLoading} reportMessage={actionMessage} />
 
             <section id="findings" className="mt-10 scroll-mt-24 sm:mt-12">
               <SectionHeading
