@@ -18,6 +18,26 @@ export interface SignupRequest {
   email: string;
   password: string;
 }
+export interface SignupResponse {
+  authenticated: false;
+  email: string;
+  message: string;
+}
+
+export interface EmailVerificationRequest {
+  email: string;
+  otp: string;
+}
+
+export interface ResendEmailVerificationRequest {
+  email: string;
+}
+
+export interface EmailVerificationResponse {
+  verified: boolean;
+  message: string;
+}
+
 export interface BackendUser {
   id: number;
   username: string;

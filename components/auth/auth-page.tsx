@@ -5,7 +5,7 @@ import { useSWRConfig } from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiErrorMessage } from "@/lib/api/client";
-import { login, signup } from "@/lib/api/auth";
+import { login, resendEmailOtp, signup, verifyEmail } from "@/lib/api/auth";
 import { establishAuthenticatedSession } from "@/lib/auth-session.mjs";
 import { ArrowDownRight, ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, ShieldCheck } from "lucide-react";
 import { AsciiScene } from "@/components/landing/ascii-scene";
@@ -141,6 +141,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [loading, setLoading] = useState(false);
   const [remember, setRemember] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -175,18 +177,23 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setErrors({});
     setLoading(true);
     try {
-      const response = isLogin
-        ? await login({
-            identifier: values.identifier.trim(),
-            password: values.password,
-            rememberMe: remember,
-          })
-        : await signup({
-            fullName: values.fullName.trim(),
-            username: values.username.trim(),
-            email: values.email.trim(),
-            password: values.password,
-          });
+      if (!isLogin) {
+        const registration = await signup({
+          fullName: values.fullName.trim(),
+          username: values.username.trim(),
+          email: values.email.trim(),
+          password: values.password,
+        });
+        setPendingEmail(registration.email);
+        setFeedback({ kind: "info", message: registration.message });
+        return;
+      }
+
+      const response = await login({
+        identifier: values.identifier.trim(),
+        password: values.password,
+        rememberMe: remember,
+      });
 
       if (!response.authenticated) {
         setFeedback({
@@ -204,6 +211,46 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         kind: "error",
         message: apiErrorMessage(error, "CloudGuard authentication could not be completed."),
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyEmail = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!pendingEmail || loading) return;
+    if (!/^\d{6}$/.test(verificationCode)) {
+      setFeedback({ kind: "error", message: "Enter the 6-digit code from your email." });
+      return;
+    }
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const response = await verifyEmail({ email: pendingEmail, otp: verificationCode });
+      if (response.verified) {
+        setPendingEmail(null);
+        setVerificationCode("");
+        router.replace("/login?verified=1");
+        return;
+      }
+      setFeedback({ kind: "error", message: response.message });
+    } catch (error) {
+      setFeedback({ kind: "error", message: apiErrorMessage(error, "Email verification failed.") });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!pendingEmail || loading) return;
+    setLoading(true);
+    setFeedback(null);
+    try {
+      const response = await resendEmailOtp({ email: pendingEmail });
+      setVerificationCode("");
+      setFeedback({ kind: "info", message: response.message });
+    } catch (error) {
+      setFeedback({ kind: "error", message: apiErrorMessage(error, "A new verification code could not be sent.") });
     } finally {
       setLoading(false);
     }
@@ -276,18 +323,44 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           <div className="mb-6 sm:mb-8">
             <div className="mb-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">
               <LockKeyhole aria-hidden="true" className="size-3.5" />
-              {isLogin ? "Returning operator" : "New operator access"}
+              {pendingEmail ? "Email verification" : isLogin ? "Returning operator" : "New operator access"}
             </div>
             <h2 id="auth-title" className="font-display text-4xl leading-[1.05] tracking-tight sm:text-[2.7rem]">
-              {isLogin ? "Sign in to your workspace" : "Create your account"}
+              {pendingEmail ? "Verify your email" : isLogin ? "Sign in to your workspace" : "Create your account"}
             </h2>
             <p className="mt-3 max-w-sm text-sm leading-6 text-white/50">
-              {isLogin
-                ? "Enter your credentials to continue to CloudGuard."
-                : "Set up your CloudGuard identity and secure access."}
+              {pendingEmail
+                ? `Enter the 6-digit code sent to ${pendingEmail}. It expires in 5 minutes.`
+                : isLogin
+                  ? "Enter your credentials to continue to CloudGuard."
+                  : "Set up your CloudGuard identity and secure access."}
             </p>
           </div>
 
+          {pendingEmail ? (
+            <form onSubmit={handleVerifyEmail} noValidate aria-busy={loading} className="flex flex-col gap-4 sm:gap-5">
+              <AuthField id="verificationCode" label="6-digit verification code">
+                <Input
+                  id="verificationCode"
+                  name="verificationCode"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  className="h-11 sm:h-12 rounded-none border-white/15 bg-white/[0.035] px-4 text-sm tracking-[0.35em] text-white shadow-none"
+                />
+              </AuthField>
+              {feedback ? <div role="alert" aria-live="polite" className={`border px-3.5 py-3 text-xs leading-5 ${statusTone}`}>{feedback.message}</div> : null}
+              <Button type="submit" disabled={loading} className="mt-1 h-12 w-full rounded-none bg-white text-[11px] font-semibold uppercase tracking-[0.16em] text-[#101210]">
+                {loading ? "Verifying…" : "Verify email"}
+              </Button>
+              <Button type="button" variant="outline" disabled={loading} onClick={handleResendOtp} className="h-11 rounded-none border-white/25 bg-transparent text-[11px] uppercase tracking-[0.16em] text-white hover:bg-white/10 hover:text-white">
+                Resend OTP
+              </Button>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} noValidate aria-busy={loading} className="flex flex-col gap-4 sm:gap-5">
             <FieldGroup className="gap-3 sm:gap-4">
               {isLogin ? (
@@ -445,6 +518,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               {!loading ? <ArrowDownRight aria-hidden="true" className="size-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:translate-y-0.5" /> : <span aria-hidden="true" className="size-4" />}
             </Button>
           </form>
+          )}
 
           <div className="mt-7 flex items-center gap-2 border-t border-white/10 pt-5 font-mono text-[9px] uppercase tracking-[0.13em] text-white/35">
             <ShieldCheck aria-hidden="true" className="size-3.5 shrink-0" />

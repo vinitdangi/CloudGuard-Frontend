@@ -3,6 +3,10 @@ import type {
   AuthResponse,
   BackendLoginRequest,
   BackendSignupRequest,
+  SignupResponse,
+  EmailVerificationRequest,
+  ResendEmailVerificationRequest,
+  EmailVerificationResponse,
   LoginRequest,
   SignupRequest,
 } from "@/lib/api/types";
@@ -37,8 +41,8 @@ export async function login(request: LoginRequest): Promise<AuthResponse> {
   return normalizeAuthResponse(response);
 }
 
-export async function signup(request: SignupRequest): Promise<AuthResponse> {
-  const response = await requestApi("signup", {
+export async function signup(request: SignupRequest): Promise<SignupResponse> {
+  return requestApi("signup", {
     body: {
       username: request.username,
       email: request.email,
@@ -46,8 +50,14 @@ export async function signup(request: SignupRequest): Promise<AuthResponse> {
       confirmation: request.password,
     },
   });
+}
 
-  return normalizeAuthResponse(response);
+export async function verifyEmail(request: EmailVerificationRequest): Promise<EmailVerificationResponse> {
+  return requestApi("verifyEmail", { body: request });
+}
+
+export async function resendEmailOtp(request: ResendEmailVerificationRequest): Promise<EmailVerificationResponse> {
+  return requestApi("resendEmailOtp", { body: request });
 }
 
 export async function getCurrentUser(): Promise<AuthResponse> {

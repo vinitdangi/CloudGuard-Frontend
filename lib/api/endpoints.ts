@@ -5,6 +5,10 @@ import type {
   BackendSignupRequest,
   AwsConnectionResponse,
   AuthResponse,
+  SignupResponse,
+  EmailVerificationRequest,
+  ResendEmailVerificationRequest,
+  EmailVerificationResponse,
   JsonReportResponse,
   LatestScanResponse,
   LoginRequest,
@@ -22,6 +26,8 @@ import type {
 export type ApiEndpointName =
   | "login"
   | "signup"
+  | "verifyEmail"
+  | "resendEmailOtp"
   | "logout"
   | "getCurrentUser"
   | "testAwsConnection"
@@ -55,7 +61,19 @@ export const API_ENDPOINTS: Record<ApiEndpointName, EndpointContract> = {
     method: "POST",
     path: "/api/auth/signup",
     requestShape: "SignupRequest { fullName, username, email, password }",
-    responseShape: "AuthResponse { authenticated, user, message? }; session should be an HttpOnly cookie",
+    responseShape: "SignupResponse { authenticated: false, email, message }; no session is created",
+  },
+  verifyEmail: {
+    method: "POST",
+    path: "/api/auth/verify-email",
+    requestShape: "EmailVerificationRequest { email, otp }",
+    responseShape: "EmailVerificationResponse { verified, message }",
+  },
+  resendEmailOtp: {
+    method: "POST",
+    path: "/api/auth/resend-otp",
+    requestShape: "ResendEmailVerificationRequest { email }",
+    responseShape: "EmailVerificationResponse { verified, message }",
   },
   logout: {
     method: "POST",
@@ -119,10 +137,14 @@ export const API_ENDPOINTS: Record<ApiEndpointName, EndpointContract> = {
   },
 };
 
-export type EndpointResponse<Name extends ApiEndpointName> = Name extends "login" | "signup"
+export type EndpointResponse<Name extends ApiEndpointName> = Name extends "login"
   ? BackendUser
-  : Name extends "logout"
-    ? LogoutResponse
+  : Name extends "signup"
+    ? SignupResponse
+    : Name extends "verifyEmail" | "resendEmailOtp"
+      ? EmailVerificationResponse
+      : Name extends "logout"
+        ? LogoutResponse
     : Name extends "getCurrentUser"
       ? BackendUser
     : Name extends "testAwsConnection"
@@ -147,7 +169,11 @@ export type EndpointRequest<Name extends ApiEndpointName> = Name extends "login"
   ? LoginRequest
   : Name extends "signup"
     ? SignupRequest
-    : Name extends "testAwsConnection"
+    : Name extends "verifyEmail"
+      ? EmailVerificationRequest
+      : Name extends "resendEmailOtp"
+        ? ResendEmailVerificationRequest
+        : Name extends "testAwsConnection"
       ? AwsConnectionTestRequest
       : Name extends "runSecurityScan"
         ? SecurityScanRequest
@@ -171,6 +197,8 @@ export type EndpointModelName = keyof EndpointContractModels;
 export type EndpointRequestMap = {
   login: BackendLoginRequest;
   signup: BackendSignupRequest;
+  verifyEmail: EmailVerificationRequest;
+  resendEmailOtp: ResendEmailVerificationRequest;
   logout: undefined;
   getCurrentUser: undefined;
   testAwsConnection: AwsConnectionTestRequest;
@@ -185,7 +213,9 @@ export type EndpointRequestMap = {
 
 export type EndpointResponseMap = {
   login: BackendUser;
-  signup: BackendUser;
+  signup: SignupResponse;
+  verifyEmail: EmailVerificationResponse;
+  resendEmailOtp: EmailVerificationResponse;
   logout: LogoutResponse;
   getCurrentUser: BackendUser;
   testAwsConnection: AwsConnectionResponse;
