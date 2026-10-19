@@ -66,13 +66,13 @@ export const API_ENDPOINTS: Record<ApiEndpointName, EndpointContract> = {
   verifyEmail: {
     method: "POST",
     path: "/api/auth/verify-email",
-    requestShape: "EmailVerificationRequest { email, otp }",
+    requestShape: "EmailVerificationRequest { email | identifier, otp }",
     responseShape: "EmailVerificationResponse { verified, message }",
   },
   resendEmailOtp: {
     method: "POST",
     path: "/api/auth/resend-otp",
-    requestShape: "ResendEmailVerificationRequest { email }",
+    requestShape: "ResendEmailVerificationRequest { email | identifier }",
     responseShape: "EmailVerificationResponse { verified, message }",
   },
   logout: {

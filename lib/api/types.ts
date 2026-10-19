@@ -25,12 +25,14 @@ export interface SignupResponse {
 }
 
 export interface EmailVerificationRequest {
-  email: string;
+  email?: string;
+  identifier?: string;
   otp: string;
 }
 
 export interface ResendEmailVerificationRequest {
-  email: string;
+  email?: string;
+  identifier?: string;
 }
 
 export interface EmailVerificationResponse {

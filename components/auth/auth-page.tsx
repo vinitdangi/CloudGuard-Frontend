@@ -142,6 +142,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [loading, setLoading] = useState(false);
   const [remember, setRemember] = useState(false);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [pendingLoginVerification, setPendingLoginVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -185,6 +186,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           password: values.password,
         });
         setPendingEmail(registration.email);
+        setPendingLoginVerification(false);
         setFeedback({ kind: "info", message: registration.message });
         return;
       }
@@ -207,10 +209,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       // guard can observe stale state during the next /api/auth/me revalidation.
       await establishAuthenticatedSession(mutate, response, () => router.replace("/dashboard"));
     } catch (error) {
-      setFeedback({
-        kind: "error",
-        message: apiErrorMessage(error, "CloudGuard authentication could not be completed."),
-      });
+      const message = apiErrorMessage(error, "CloudGuard authentication could not be completed.");
+      if (isLogin && message === "Please verify your email before logging in.") {
+        setPendingEmail(values.identifier.trim());
+        setPendingLoginVerification(true);
+        setFeedback({ kind: "error", message });
+      } else {
+        setFeedback({ kind: "error", message });
+      }
     } finally {
       setLoading(false);
     }
@@ -226,9 +232,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setLoading(true);
     setFeedback(null);
     try {
-      const response = await verifyEmail({ email: pendingEmail, otp: verificationCode });
+      const response = await verifyEmail({ identifier: pendingEmail, otp: verificationCode });
       if (response.verified) {
         setPendingEmail(null);
+        setPendingLoginVerification(false);
         setVerificationCode("");
         router.replace("/login?verified=1");
         return;
@@ -246,7 +253,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setLoading(true);
     setFeedback(null);
     try {
-      const response = await resendEmailOtp({ email: pendingEmail });
+      const response = await resendEmailOtp({ identifier: pendingEmail });
       setVerificationCode("");
       setFeedback({ kind: "info", message: response.message });
     } catch (error) {
@@ -330,7 +337,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             </h2>
             <p className="mt-3 max-w-sm text-sm leading-6 text-white/50">
               {pendingEmail
-                ? `Enter the 6-digit code sent to ${pendingEmail}. It expires in 5 minutes.`
+                ? pendingLoginVerification
+                  ? "Enter the 6-digit code sent to the email on this account. It expires in 5 minutes."
+                  : `Enter the 6-digit code sent to ${pendingEmail}. It expires in 5 minutes.`
                 : isLogin
                   ? "Enter your credentials to continue to CloudGuard."
                   : "Set up your CloudGuard identity and secure access."}
@@ -357,7 +366,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 {loading ? "Verifying…" : "Verify email"}
               </Button>
               <Button type="button" variant="outline" disabled={loading} onClick={handleResendOtp} className="h-11 rounded-none border-white/25 bg-transparent text-[11px] uppercase tracking-[0.16em] text-white hover:bg-white/10 hover:text-white">
-                Resend OTP
+                {pendingLoginVerification ? "Resend verification code" : "Resend OTP"}
               </Button>
             </form>
           ) : (
