@@ -494,13 +494,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   />
                   <Label htmlFor="remember" className="cursor-pointer text-xs font-normal text-white/55">Remember me</Label>
                 </Field>
-                <button
-                  type="button"
-                  onClick={() => setFeedback({ kind: "info", message: "Password reset is not connected yet. No request was sent." })}
+                <Link
+                  href="/forgot-password"
                   className="text-xs text-white/55 underline decoration-white/20 underline-offset-4 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                 >
                   Forgot password?
-                </button>
+                </Link>
               </div>
             ) : (
               <p className="flex items-start gap-2 text-[11px] leading-5 text-white/40">

@@ -40,6 +40,21 @@ export interface EmailVerificationResponse {
   message: string;
 }
 
+export interface ForgotPasswordRequest {
+  email?: string;
+  identifier?: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+  confirmation: string;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
 export interface BackendUser {
   id: number;
   username: string;

@@ -1,7 +1,14 @@
 import { apiProxyDestination } from "./lib/api/base-url.mjs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  turbopack: {
+    root: frontendRoot,
+  },
   images: {
     unoptimized: true,
   },

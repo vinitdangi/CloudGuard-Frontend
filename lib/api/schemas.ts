@@ -96,6 +96,8 @@ export const API_RESPONSE_SCHEMAS = {
   signup: z.object({ authenticated: z.literal(false), email: z.string().email(), message: z.string() }),
   verifyEmail: z.object({ verified: z.boolean(), message: z.string() }),
   resendEmailOtp: z.object({ verified: z.boolean(), message: z.string() }),
+  forgotPassword: z.object({ message: z.string() }),
+  resetPassword: z.object({ message: z.string() }),
   logout: z.object({ loggedOut: z.boolean() }),
   getCurrentUser: backendUserSchema,
   testAwsConnection: z.object({

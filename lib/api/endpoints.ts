@@ -9,6 +9,9 @@ import type {
   EmailVerificationRequest,
   ResendEmailVerificationRequest,
   EmailVerificationResponse,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+  MessageResponse,
   JsonReportResponse,
   LatestScanResponse,
   LoginRequest,
@@ -28,6 +31,8 @@ export type ApiEndpointName =
   | "signup"
   | "verifyEmail"
   | "resendEmailOtp"
+  | "forgotPassword"
+  | "resetPassword"
   | "logout"
   | "getCurrentUser"
   | "testAwsConnection"
@@ -74,6 +79,18 @@ export const API_ENDPOINTS: Record<ApiEndpointName, EndpointContract> = {
     path: "/api/auth/resend-otp",
     requestShape: "ResendEmailVerificationRequest { email | identifier }",
     responseShape: "EmailVerificationResponse { verified, message }",
+  },
+  forgotPassword: {
+    method: "POST",
+    path: "/api/auth/forgot-password",
+    requestShape: "ForgotPasswordRequest { email | identifier }",
+    responseShape: "MessageResponse { message }",
+  },
+  resetPassword: {
+    method: "POST",
+    path: "/api/auth/reset-password",
+    requestShape: "ResetPasswordRequest { token, password, confirmation }",
+    responseShape: "MessageResponse { message }",
   },
   logout: {
     method: "POST",
@@ -143,6 +160,8 @@ export type EndpointResponse<Name extends ApiEndpointName> = Name extends "login
     ? SignupResponse
     : Name extends "verifyEmail" | "resendEmailOtp"
       ? EmailVerificationResponse
+      : Name extends "forgotPassword" | "resetPassword"
+        ? MessageResponse
       : Name extends "logout"
         ? LogoutResponse
     : Name extends "getCurrentUser"
@@ -173,6 +192,10 @@ export type EndpointRequest<Name extends ApiEndpointName> = Name extends "login"
       ? EmailVerificationRequest
       : Name extends "resendEmailOtp"
         ? ResendEmailVerificationRequest
+        : Name extends "forgotPassword"
+          ? ForgotPasswordRequest
+          : Name extends "resetPassword"
+            ? ResetPasswordRequest
         : Name extends "testAwsConnection"
       ? AwsConnectionTestRequest
       : Name extends "runSecurityScan"
@@ -199,6 +222,8 @@ export type EndpointRequestMap = {
   signup: BackendSignupRequest;
   verifyEmail: EmailVerificationRequest;
   resendEmailOtp: ResendEmailVerificationRequest;
+  forgotPassword: ForgotPasswordRequest;
+  resetPassword: ResetPasswordRequest;
   logout: undefined;
   getCurrentUser: undefined;
   testAwsConnection: AwsConnectionTestRequest;
@@ -216,6 +241,8 @@ export type EndpointResponseMap = {
   signup: SignupResponse;
   verifyEmail: EmailVerificationResponse;
   resendEmailOtp: EmailVerificationResponse;
+  forgotPassword: MessageResponse;
+  resetPassword: MessageResponse;
   logout: LogoutResponse;
   getCurrentUser: BackendUser;
   testAwsConnection: AwsConnectionResponse;

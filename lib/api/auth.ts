@@ -9,6 +9,9 @@ import type {
   EmailVerificationResponse,
   LoginRequest,
   SignupRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+  MessageResponse,
 } from "@/lib/api/types";
 
 interface BackendUser {
@@ -58,6 +61,14 @@ export async function verifyEmail(request: EmailVerificationRequest): Promise<Em
 
 export async function resendEmailOtp(request: ResendEmailVerificationRequest): Promise<EmailVerificationResponse> {
   return requestApi("resendEmailOtp", { body: request });
+}
+
+export async function forgotPassword(request: ForgotPasswordRequest): Promise<MessageResponse> {
+  return requestApi("forgotPassword", { body: request });
+}
+
+export async function resetPassword(request: ResetPasswordRequest): Promise<MessageResponse> {
+  return requestApi("resetPassword", { body: request });
 }
 
 export async function getCurrentUser(): Promise<AuthResponse> {
