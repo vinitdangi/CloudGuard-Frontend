@@ -16,6 +16,7 @@ const plans = [
       "CloudTrail logging checks",
     ],
     cta: "Explore checks",
+    href: "/scan",
     highlight: false,
   },
   {
@@ -29,6 +30,7 @@ const plans = [
       "Scan History",
     ],
     cta: "View assessment",
+    href: "/scan",
     highlight: true,
   },
   {
@@ -41,6 +43,7 @@ const plans = [
       "Assessment results",
     ],
     cta: "See report formats",
+    href: "/dashboard#reports",
     highlight: false,
   },
 ];
@@ -159,7 +162,8 @@ export function PricingSection() {
                   </ul>
 
                   {/* CTA */}
-                  <button
+                  <a
+                    href={plan.href}
                     className={`w-full py-4 flex items-center justify-center gap-2 text-sm font-medium transition-all group ${
                       plan.highlight
                         ? "bg-foreground text-background hover:bg-foreground/90"
@@ -168,7 +172,7 @@ export function PricingSection() {
                   >
                     {plan.cta}
                     <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                  </button>
+                  </a>
                 </div>
               </div>
             ))}
@@ -193,7 +197,7 @@ export function PricingSection() {
               PDF & JSON Reports
             </span>
           </div>
-          <a href="#" className="text-sm underline underline-offset-4 hover:text-foreground transition-colors">
+          <a href="/scan" className="text-sm underline underline-offset-4 hover:text-foreground transition-colors">
             Discuss your assessment scope
           </a>
         </div>

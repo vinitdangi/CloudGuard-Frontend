@@ -5,31 +5,31 @@ import { useEffect, useRef } from "react";
 
 const footerLinks: Record<string, { name: string; href: string }[]> = {
   Product: [
-    { name: "AWS security checks", href: "#features" },
-    { name: "Assessment workflow", href: "#how-it-works" },
-    { name: "Security Score", href: "#security" },
-    { name: "Scan History", href: "#metrics" },
+    { name: "AWS security checks", href: "/scan" },
+    { name: "Assessment workflow", href: "/scan" },
+    { name: "Security Score", href: "/dashboard#security-posture" },
+    { name: "Scan History", href: "/dashboard#scan-history" },
   ],
   "AWS checks": [
-    { name: "IAM and S3", href: "#infra" },
-    { name: "Security Groups", href: "#infra" },
-    { name: "Network ACLs", href: "#infra" },
-    { name: "CloudTrail logging", href: "#infra" },
+    { name: "IAM and S3", href: "/scan#aws-configuration" },
+    { name: "Security Groups", href: "/scan#aws-configuration" },
+    { name: "Network ACLs", href: "/scan#aws-configuration" },
+    { name: "CloudTrail logging", href: "/scan#aws-configuration" },
   ],
   Assessment: [
-    { name: "AWS connection test", href: "#how-it-works" },
-    { name: "Security risk assessment", href: "#security" },
+    { name: "AWS connection test", href: "/scan#aws-configuration" },
+    { name: "Security risk assessment", href: "/scan" },
   ],
   Reports: [
-    { name: "PDF reports", href: "#integrations" },
-    { name: "JSON reports", href: "#integrations" },
+    { name: "PDF reports", href: "/dashboard#reports" },
+    { name: "JSON reports", href: "/dashboard#reports" },
   ],
 };
 
 const socialLinks = [
-  { name: "AWS checks", href: "#integrations" },
-  { name: "PDF reports", href: "#integrations" },
-  { name: "JSON reports", href: "#integrations" },
+  { name: "AWS checks", href: "/scan" },
+  { name: "PDF reports", href: "/dashboard#reports" },
+  { name: "JSON reports", href: "/dashboard#reports" },
 ];
 
 function AnimatedWaveCanvas() {
@@ -111,7 +111,7 @@ export function FooterSection() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-12 lg:gap-8">
             {/* Brand Column */}
             <div className="col-span-2">
-              <a href="#" className="inline-flex items-center gap-2 mb-6">
+              <a href="/" className="inline-flex items-center gap-2 mb-6">
                 <span className="text-2xl font-display text-white">CloudGuard</span>
               </a>
 
