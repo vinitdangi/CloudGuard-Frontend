@@ -119,6 +119,8 @@ export function SecurityScanSection({
   onReportDownload,
   reportLoading,
   reportMessage,
+  onScanResult,
+  dashboardHrefPrefix = "",
 }: {
   snapshot: DashboardSnapshot;
   connection: AwsConnectionState;
@@ -126,6 +128,8 @@ export function SecurityScanSection({
   onReportDownload: (format: ReportFormat) => Promise<void>;
   reportLoading: ReportFormat | null;
   reportMessage: { kind: "error" | "success"; message: string } | null;
+  onScanResult?: (result: Awaited<ReturnType<typeof runSecurityScan>>) => void;
+  dashboardHrefPrefix?: string;
 }) {
   const { mutate } = useSWRConfig();
   const connectionState = connection.status;
@@ -222,6 +226,7 @@ export function SecurityScanSection({
         } : {}),
       }));
       setScanResult(response);
+      onScanResult?.(response);
       setScanMessage(`CloudGuard returned scan data with status: ${response.scan.status}.`);
       await mutate<DashboardDataResult>(
         DASHBOARD_DATA_KEY,
@@ -536,13 +541,13 @@ export function SecurityScanSection({
             <LockKeyhole aria-hidden="true" className="size-3" />Latest scan actions
           </span>
           <Button asChild variant="outline" size="sm" className="h-8 rounded-none border-white/10 bg-transparent text-[8px] uppercase tracking-[0.08em] text-white/60 hover:bg-white/[0.06] hover:text-white">
-            <Link href="#findings">View Findings <ArrowRight data-icon="inline-end" /></Link>
+            <Link href={`${dashboardHrefPrefix}#findings`}>View Findings <ArrowRight data-icon="inline-end" /></Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="h-8 rounded-none border-white/10 bg-transparent text-[8px] uppercase tracking-[0.08em] text-white/60 hover:bg-white/[0.06] hover:text-white">
-            <Link href="#security-posture">View Security Posture <ArrowRight data-icon="inline-end" /></Link>
+            <Link href={`${dashboardHrefPrefix}#security-posture`}>View Security Posture <ArrowRight data-icon="inline-end" /></Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="h-8 rounded-none border-white/10 bg-transparent text-[8px] uppercase tracking-[0.08em] text-white/60 hover:bg-white/[0.06] hover:text-white">
-            <Link href="#scan-history">View Scan History <ArrowRight data-icon="inline-end" /></Link>
+            <Link href={`${dashboardHrefPrefix}#scan-history`}>View Scan History <ArrowRight data-icon="inline-end" /></Link>
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => { void onReportDownload("pdf"); }} disabled={reportLoading !== null} className="h-8 rounded-none border-white/10 bg-transparent text-[8px] uppercase tracking-[0.08em] text-white/60">
             <Download data-icon="inline-start" />{reportLoading === "pdf" ? "Downloading PDF…" : "Download PDF Report"}

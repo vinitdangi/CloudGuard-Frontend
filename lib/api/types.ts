@@ -173,6 +173,8 @@ export interface BackendSecurityFinding {
 }
 
 export interface SecurityScanResponse {
+  /** Full result returned by the backend, including PASS and failed controls. */
+  backendResponse: BackendSecurityScanResponse;
   scan: DashboardScan;
   score: SecurityScore;
   findings: DashboardFinding[];

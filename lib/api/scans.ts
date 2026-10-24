@@ -55,6 +55,7 @@ export async function runSecurityScan(
   };
 
   return {
+    backendResponse: response,
     scan: {
       id: response.scan_timestamp,
       dateTime: response.scan_timestamp,
